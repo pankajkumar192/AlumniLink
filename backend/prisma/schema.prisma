@@ -1,0 +1,352 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model - Core user entity
+model User {
+  id                    Int       @id @default(autoincrement())
+  name                  String
+  email                 String    @unique
+  password              String
+  role                  Role      @default(STUDENT)
+  bio                   String?
+  avatar                String?   @default("https://i.pravatar.cc/150?img=1")
+  phone                 String?
+  company               String?
+  position              String?
+  yearsOfExperience     Int?
+  university            String?
+  graduationYear        Int?
+  skills                String?   // JSON string of skills array
+  interests             String?   // JSON string of interests array
+  isVerified            Boolean   @default(false)
+  isMentor              Boolean   @default(false)
+  mentorBio             String?
+  mentorRating          Float     @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  mentor                Mentor?
+  jobPostings           JobPosting[]      @relation("PostedBy")
+  mentorshipRequests    MentorshipRequest[] @relation("Student")
+  studentMeetings       Meeting[]         @relation("StudentMeetings")
+  events                Event[]           @relation("Organizer")
+  eventAttendees        EventAttendee[]
+  jobApplications       JobApplication[]
+  notifications         Notification[]    @relation("Recipient")
+  sentNotifications     Notification[]    @relation("Sender")
+  conversationsAsUser1  Conversation[]    @relation("User1")
+  conversationsAsUser2  Conversation[]    @relation("User2")
+  messages              Message[]
+
+  // Community Feed Relations
+  posts                 Post[]
+  comments              Comment[]
+  likes                 Like[]
+
+  @@index([email])
+  @@index([isMentor])
+  @@index([role])
+}
+
+// Mentor Model - Extended profile for mentors
+model Mentor {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @unique
+  company           String
+  skills            String    // JSON string of skills array
+  availability      String    // e.g., "weekends", "evenings", "flexible"
+  hourlyRate        Float?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mentorshipRequests MentorshipRequest[]
+  meetings           Meeting[]
+
+  @@index([userId])
+}
+
+// MentorshipRequest Model
+model MentorshipRequest {
+  id                Int       @id @default(autoincrement())
+  studentId         Int
+  mentorId          Int
+  subject           String
+  message           String?   @db.LongText
+  status            MentorshipStatus @default(PENDING)
+  startDate         DateTime?
+  endDate           DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  student           User      @relation("Student", fields: [studentId], references: [id], onDelete: Cascade)
+  mentor            Mentor    @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([mentorId])
+  @@index([status])
+}
+
+// JobPosting Model
+model JobPosting {
+  id                Int       @id @default(autoincrement())
+  title             String
+  description       String    @db.LongText
+  company           String
+  location          String?
+  salary            String?
+  jobType           JobType   @default(FULL_TIME)
+  skills            String?   // JSON string of skills array
+  postedBy          Int
+  deadline          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  poster            User      @relation("PostedBy", fields: [postedBy], references: [id], onDelete: Cascade)
+  applications      JobApplication[]
+
+  @@index([postedBy])
+  @@index([company])
+  @@index([createdAt])
+}
+
+// JobApplication Model
+model JobApplication {
+  id                Int       @id @default(autoincrement())
+  jobId             Int
+  userId            Int
+  status            ApplicationStatus @default(PENDING)
+  appliedAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  job               JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicant         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, userId])
+  @@index([userId])
+  @@index([status])
+}
+
+// Event Model
+model Event {
+  id                Int       @id @default(autoincrement())
+  title             String
+  description       String?   @db.LongText
+  date              DateTime
+  location          String?
+  eventType         EventType @default(NETWORKING)
+  organizerId       Int
+  capacity          Int?
+  image             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  organizer         User      @relation("Organizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  attendees         EventAttendee[]
+
+  @@index([organizerId])
+  @@index([date])
+  @@index([eventType])
+}
+
+// EventAttendee Model
+model EventAttendee {
+  id                Int       @id @default(autoincrement())
+  eventId           Int
+  userId            Int
+  registeredAt      DateTime  @default(now())
+
+  // Relations
+  event             Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+}
+
+// Notification Model
+model Notification {
+  id                Int       @id @default(autoincrement())
+  recipientId       Int
+  senderId          Int?
+  title             String
+  message           String    @db.LongText
+  type              NotificationType
+  read              Boolean   @default(false)
+  relatedId         Int?      // Reference to related entity (job, event, mentorship, etc.)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  recipient         User      @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  sender            User?     @relation("Sender", fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId])
+  @@index([read])
+  @@index([createdAt])
+}
+
+// Enums
+enum Role {
+  STUDENT
+  ALUMNI
+  ADMIN
+}
+
+enum MentorshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+  CONTRACT
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWED
+  REJECTED
+  ACCEPTED
+}
+
+enum EventType {
+  NETWORKING
+  WORKSHOP
+  SEMINAR
+  CAREER_FAIR
+}
+
+enum NotificationType {
+  MENTORSHIP_REQUEST
+  JOB_APPLICATION
+  EVENT_INVITE
+  PROFILE_UPDATE
+  SYSTEM
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+// Chat System Models
+model Conversation {
+  id          Int       @id @default(autoincrement())
+  user1Id     Int
+  user2Id     Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user1       User      @relation("User1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2       User      @relation("User2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([updatedAt])
+}
+
+model Message {
+  id              Int           @id @default(autoincrement())
+  conversationId  Int
+  senderId        Int
+  content         String        @db.LongText
+  isRead          Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  // Relations
+  conversation    Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender          User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+// Community Feed Models
+model Post {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  content   String    @db.LongText
+  image     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  likes     Like[]
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  postId    Int
+  userId    Int
+  content   String   @db.LongText
+  createdAt DateTime @default(now())
+  
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([userId])
+}
+
+model Like {
+  id        Int      @id @default(autoincrement())
+  postId    Int
+  userId    Int
+  createdAt DateTime @default(now())
+  
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+}
+
+// Scheduling System
+model Meeting {
+  id          Int       @id @default(autoincrement())
+  studentId   Int
+  mentorId    Int
+  title       String
+  date        DateTime
+  duration    Int       @default(30) // minutes
+  link        String?   // Video call link
+  status      MeetingStatus @default(SCHEDULED)
+  createdAt   DateTime  @default(now())
+
+  student     User      @relation("StudentMeetings", fields: [studentId], references: [id], onDelete: Cascade)
+  mentor      Mentor    @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([mentorId])
+  @@index([date])
+}
