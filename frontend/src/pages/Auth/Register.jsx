@@ -4,6 +4,7 @@ import { User, Mail, Lock, Eye, EyeOff, Loader2, Github, Chrome, CheckCircle2, A
 import { Link, useNavigate } from "react-router-dom";
 import useAuthStore from "../../store/authStore";
 import { Toaster, toast } from "sonner";
+import { signInWithGoogle, signInWithGithub } from "../../firebase";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -17,8 +18,10 @@ const Register = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(null);
   const navigate = useNavigate();
   const register = useAuthStore((state) => state.register);
+  const oauthLogin = useAuthStore((state) => state.oauthLogin);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   useEffect(() => {
@@ -69,6 +72,27 @@ const Register = () => {
       toast.error(error.response?.data?.message || "Registration failed");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleOAuth = async (provider) => {
+    setOauthLoading(provider);
+    try {
+      const signInFn = provider === "google" ? signInWithGoogle : signInWithGithub;
+      const { idToken } = await signInFn();
+      const data = await oauthLogin(idToken, provider);
+      toast.success(`Signed in with ${provider === "google" ? "Google" : "GitHub"} 🎉`);
+      // Always go to onboarding on Register page (user is signing up for the first time)
+      setTimeout(() => navigate(data.isNewUser ? "/onboarding" : "/dashboard"), 400);
+    } catch (error) {
+      if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request") {
+        toast.info("Sign-in cancelled");
+      } else {
+        toast.error(error.response?.data?.message || `${provider} login failed. Please try again.`);
+        console.error(`OAuth error (${provider}):`, error);
+      }
+    } finally {
+      setOauthLoading(null);
     }
   };
 
@@ -320,24 +344,28 @@ const Register = () => {
 
           {/* Social Sign Up */}
           <motion.div className="grid grid-cols-2 gap-3" variants={itemVariants}>
-            <motion.button
-              type="button"
-              className="glass-effect py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 hover:bg-white/10 transition-all"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Chrome className="w-4 h-4" />
-              Google
-            </motion.button>
-            <motion.button
-              type="button"
-              className="glass-effect py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 hover:bg-white/10 transition-all"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <Github className="w-4 h-4" />
-              GitHub
-            </motion.button>
+            {[
+              { id: "google", icon: Chrome, label: "Google", color: "hover:border-red-400/40 hover:text-red-300" },
+              { id: "github", icon: Github, label: "GitHub", color: "hover:border-white/30 hover:text-white" },
+            ].map(({ id, icon: Icon, label, color }) => (
+              <motion.button
+                key={id}
+                type="button"
+                id={`oauth-${id}-register`}
+                disabled={!!oauthLoading || isLoading}
+                onClick={() => handleOAuth(id)}
+                className={`border border-white/10 py-2.5 rounded-lg font-medium text-sm flex items-center justify-center gap-2 text-gray-400 ${color} hover:bg-white/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                {oauthLoading === id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Icon className="w-4 h-4" />
+                )}
+                {label}
+              </motion.button>
+            ))}
           </motion.div>
 
           {/* Sign In Link */}

@@ -4,6 +4,7 @@ import { Mail, Lock, Eye, EyeOff, Loader2, Github, Chrome } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import useAuthStore from "../../store/authStore";
 import { Toaster, toast } from "sonner";
+import { signInWithGoogle, signInWithGithub } from "../../firebase";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -11,8 +12,10 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(null); // "google" | "github" | null
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
+  const oauthLogin = useAuthStore((state) => state.oauthLogin);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   useEffect(() => {
@@ -33,6 +36,28 @@ const Login = () => {
       toast.error(error.response?.data?.message || "Login failed");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleOAuth = async (provider) => {
+    setOauthLoading(provider);
+    try {
+      const signInFn = provider === "google" ? signInWithGoogle : signInWithGithub;
+      const { idToken } = await signInFn();
+      const data = await oauthLogin(idToken, provider);
+      toast.success(`Signed in with ${provider === "google" ? "Google" : "GitHub"} 🎉`);
+      // New users go to onboarding to set role + photo; returning users go to dashboard
+      setTimeout(() => navigate(data.isNewUser ? "/onboarding" : "/dashboard"), 400);
+    } catch (error) {
+      // Firebase popup closed by user
+      if (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request") {
+        toast.info("Sign-in cancelled");
+      } else {
+        toast.error(error.response?.data?.message || `${provider} login failed. Please try again.`);
+        console.error(`OAuth error (${provider}):`, error);
+      }
+    } finally {
+      setOauthLoading(null);
     }
   };
 
@@ -84,6 +109,42 @@ const Login = () => {
             <p className="text-gray-500 text-sm">Sign in to your account to continue</p>
           </motion.div>
 
+          {/* OAuth Buttons – shown FIRST for convenience */}
+          <motion.div className="grid grid-cols-2 gap-3 mb-7" variants={itemVariants}>
+            {[
+              { id: "google", icon: Chrome, label: "Google", color: "hover:border-red-400/40 hover:text-red-300" },
+              { id: "github", icon: Github, label: "GitHub", color: "hover:border-white/30 hover:text-white" },
+            ].map(({ id, icon: Icon, label, color }) => (
+              <motion.button
+                key={id}
+                type="button"
+                id={`oauth-${id}-login`}
+                disabled={!!oauthLoading || isLoading}
+                onClick={() => handleOAuth(id)}
+                className={`border border-white/10 py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-gray-400 ${color} hover:bg-white/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                {oauthLoading === id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Icon className="w-4 h-4" />
+                )}
+                {label}
+              </motion.button>
+            ))}
+          </motion.div>
+
+          {/* Divider */}
+          <motion.div className="relative mb-7" variants={itemVariants}>
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/5" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="px-4 bg-[#111]/80 text-gray-500 text-xs font-medium tracking-widest uppercase">or sign in with email</span>
+            </div>
+          </motion.div>
+
           {/* Form */}
           <motion.form onSubmit={handleSubmit} className="space-y-5" variants={itemVariants}>
             {/* Email */}
@@ -92,6 +153,7 @@ const Login = () => {
               <div className="relative group">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
                 <input
+                  id="login-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -108,6 +170,7 @@ const Login = () => {
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
                 <input
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -141,8 +204,9 @@ const Login = () => {
 
             {/* Submit */}
             <motion.button
+              id="login-submit"
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !!oauthLoading}
               className="w-full bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-bold py-4 rounded-2xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-glow-primary hover:shadow-glow-secondary text-sm tracking-wide"
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.99 }}
@@ -154,34 +218,6 @@ const Login = () => {
               )}
             </motion.button>
           </motion.form>
-
-          {/* Divider */}
-          <motion.div className="relative my-7" variants={itemVariants}>
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/5" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="px-4 bg-[#111]/80 text-gray-500 text-xs font-medium tracking-widest uppercase">or continue with</span>
-            </div>
-          </motion.div>
-
-          {/* Social */}
-          <motion.div className="grid grid-cols-2 gap-3" variants={itemVariants}>
-            {[
-              { icon: Chrome, label: "Google" },
-              { icon: Github, label: "GitHub" },
-            ].map(({ icon: Icon, label }) => (
-              <motion.button
-                key={label}
-                type="button"
-                className="border border-white/10 hover:border-white/20 py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Icon className="w-4 h-4" />{label}
-              </motion.button>
-            ))}
-          </motion.div>
 
           {/* Sign Up */}
           <motion.p className="text-center text-gray-500 text-sm mt-7" variants={itemVariants}>

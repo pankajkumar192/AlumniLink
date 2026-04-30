@@ -1,4 +1,6 @@
 import { registerUser, loginUser, generateToken, getUserProfile, updateUserProfile } from "../services/authService.js";
+import admin from "../config/firebase-admin.js";
+import prisma from "../config/database.js";
 
 // Register
 const register = async (req, res) => {
@@ -67,6 +69,77 @@ const login = async (req, res) => {
   }
 };
 
+// OAuth Login (Google / GitHub via Firebase ID Token)
+const oauthLogin = async (req, res) => {
+  try {
+    // Guard: Firebase not configured yet
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    if (!projectId || projectId.startsWith("YOUR_")) {
+      return res.status(503).json({
+        success: false,
+        message: "OAuth is not configured on this server. Please set up Firebase Admin SDK credentials in backend/.env.",
+      });
+    }
+
+    const { idToken, provider } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ success: false, message: "Firebase ID token is required" });
+    }
+
+    // Verify the Firebase ID token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { uid, email, name, picture } = decodedToken;
+
+    if (!email) {
+      return res.status(400).json({ success: false, message: "Email not available from OAuth provider" });
+    }
+
+    // Find or create the user in our DB
+    let user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    let isNewUser = false;
+
+    if (!user) {
+      isNewUser = true;
+      // First-time OAuth login – auto-create with STUDENT role (they can change in onboarding)
+      user = await prisma.user.create({
+        data: {
+          name: name || email.split("@")[0],
+          email: email.toLowerCase(),
+          password: "", // No password for OAuth users
+          role: "STUDENT",
+          avatar: picture || `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+          isVerified: true, // Email verified by the OAuth provider
+        },
+      });
+    }
+
+    const token = generateToken(user.id);
+
+    res.status(200).json({
+      success: true,
+      isNewUser,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar,
+      },
+    });
+  } catch (error) {
+    console.error("OAuth login error:", error);
+    if (error.code === "auth/id-token-expired") {
+      return res.status(401).json({ success: false, message: "Session expired. Please sign in again." });
+    }
+    if (error.code === "auth/argument-error" || error.code === "auth/id-token-revoked") {
+      return res.status(401).json({ success: false, message: "Invalid authentication token" });
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Get Current User
 const getMe = async (req, res) => {
   try {
@@ -80,7 +153,7 @@ const getMe = async (req, res) => {
 // Update Profile
 const updateProfile = async (req, res) => {
   try {
-    const { name, bio, phone, company, position, yearsOfExperience, university, graduationYear, skills, interests, avatar } =
+    const { name, bio, phone, company, position, yearsOfExperience, university, graduationYear, skills, interests, avatar, role } =
       req.body;
 
     const updateData = {};
@@ -96,6 +169,7 @@ const updateProfile = async (req, res) => {
     if (skills) updateData.skills = JSON.stringify(skills);
     if (interests) updateData.interests = JSON.stringify(interests);
     if (avatar) updateData.avatar = avatar;
+    if (role) updateData.role = role.toUpperCase();
 
     const user = await updateUserProfile(req.user.id, updateData);
 
@@ -105,4 +179,4 @@ const updateProfile = async (req, res) => {
   }
 };
 
-export { register, login, getMe, updateProfile };
+export { register, login, oauthLogin, getMe, updateProfile };

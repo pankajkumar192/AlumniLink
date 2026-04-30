@@ -15,10 +15,12 @@ import Profile from "./pages/Profile";
 import Messages from "./pages/Messages";
 import Community from "./pages/Community";
 import LandingPage from "./pages/LandingPage";
+import OAuthOnboarding from "./pages/OAuthOnboarding";
 
 // Components
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
+import RightPanel from "./components/layout/RightPanel";
 
 // Styles
 import "./styles/index.css";
@@ -35,11 +37,10 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-// Main Layout
+// Main Layout (3-Column SaaS Architecture)
 const MainLayout = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(window.innerWidth >= 1024);
 
-  // Handle resize to auto-open/close sidebar
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
@@ -53,25 +54,30 @@ const MainLayout = ({ children }) => {
   }, []);
 
   return (
-    <div className="flex bg-dark text-white min-h-screen relative overflow-hidden">
-      {/* Premium Background Effects */}
-      <div className="fixed inset-0 bg-noise pointer-events-none z-0" />
-      <div className="animated-blob w-[600px] h-[600px] bg-blue-500/20 top-[-200px] left-[-200px] animate-blob z-0" />
-      <div className="animated-blob w-[500px] h-[500px] bg-purple-500/20 bottom-[-100px] right-[-100px] animate-blob animation-delay-2000 z-0" />
-      <div className="animated-blob w-[400px] h-[400px] bg-emerald-500/10 top-[40%] left-[60%] animate-blob animation-delay-4000 z-0" />
-
+    <div className="flex bg-[#080b12] text-gray-200 min-h-screen w-full overflow-hidden font-sans">
+      {/* Left Column: Navigation */}
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
-      <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+      
+      {/* Center Column: Main Application Content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
         <Navbar onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <motion.main
-          className="flex-1 overflow-auto p-6 lg:p-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-        >
-          <div className="max-w-7xl mx-auto">{children}</div>
-        </motion.main>
+        <main className="flex-1 overflow-y-auto p-6 lg:p-10 custom-scrollbar relative">
+          {/* Subtle top gradient for depth */}
+          <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#4f8cff]/[0.02] to-transparent pointer-events-none" />
+          
+          <motion.div
+            className="max-w-6xl mx-auto relative z-10"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
+          >
+            {children}
+          </motion.div>
+        </main>
       </div>
+
+      {/* Right Column: Activity & Notifications */}
+      <RightPanel />
     </div>
   );
 };
@@ -92,6 +98,16 @@ function App() {
         {/* Auth Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Register />} />
+
+        {/* OAuth Onboarding */}
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <OAuthOnboarding />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Protected Routes */}
         <Route
@@ -155,16 +171,6 @@ function App() {
           }
         />
         <Route
-          path="/community"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Community />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/messages"
           element={
             <ProtectedRoute>
@@ -185,7 +191,6 @@ function App() {
           }
         />
 
-        {/* Redirect */}
         {/* Landing + Redirect */}
         <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
       </Routes>

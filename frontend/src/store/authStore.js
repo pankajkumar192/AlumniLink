@@ -1,4 +1,4 @@
-import create from "zustand";
+import { create } from "zustand";
 import { authAPI } from "../utils/api";
 
 const useAuthStore = create((set) => ({
@@ -6,6 +6,7 @@ const useAuthStore = create((set) => ({
   token: localStorage.getItem("token") || null,
   isAuthenticated: !!localStorage.getItem("token"),
   isLoading: false,
+  isNewOAuthUser: false, // true when OAuth user logs in for the first time
   error: null,
 
   register: async (credentials) => {
@@ -46,9 +47,33 @@ const useAuthStore = create((set) => ({
     }
   },
 
+  // OAuth login (Google / GitHub via Firebase)
+  oauthLogin: async (idToken, provider = "google") => {
+    set({ isLoading: true, error: null });
+    try {
+      const { data } = await authAPI.oauthLogin({ idToken, provider });
+      localStorage.setItem("token", data.token);
+      set({
+        user: data.user,
+        token: data.token,
+        isAuthenticated: true,
+        isNewOAuthUser: data.isNewUser === true, // flag for onboarding redirect
+        isLoading: false,
+      });
+      return data;
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || "OAuth login failed";
+      set({ error: errorMsg, isLoading: false });
+      throw error;
+    }
+  },
+
+  // Called after onboarding is completed – clears the new-user flag
+  clearNewOAuthUser: () => set({ isNewOAuthUser: false }),
+
   logout: () => {
     localStorage.removeItem("token");
-    set({ user: null, token: null, isAuthenticated: false });
+    set({ user: null, token: null, isAuthenticated: false, isNewOAuthUser: false });
   },
 
   getMe: async () => {
@@ -57,8 +82,11 @@ const useAuthStore = create((set) => ({
       set({ user: data.data });
       return data.data;
     } catch (error) {
-      set({ isAuthenticated: false, token: null });
-      localStorage.removeItem("token");
+      // Only clear auth on explicit 401 (unauthorized), not network errors
+      if (error.response?.status === 401) {
+        set({ isAuthenticated: false, token: null });
+        localStorage.removeItem("token");
+      }
     }
   },
 }));

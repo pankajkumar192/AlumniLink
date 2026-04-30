@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
-import prisma from "./config/database.js";
+import prisma, { connectDB } from "./config/database.js";
 
 // Load env vars
 dotenv.config({ path: "./.env" });
@@ -35,7 +35,11 @@ const io = new Server(server, {
 });
 
 // Middleware
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(cors({ origin: process.env.CLIENT_URL }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -113,7 +117,7 @@ io.on("connection", (socket) => {
   socket.on("send_message", async (data) => {
     try {
       const { conversationId, content, receiverId } = data;
-      
+
       // Save message to database
       const message = await prisma.message.create({
         data: {
@@ -153,6 +157,9 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+// Connect to DB then start server
+connectDB().then(() => {
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
 });

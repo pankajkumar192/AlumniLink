@@ -18,6 +18,7 @@ export const authAPI = {
   login: (data) => API.post("/auth/login", data),
   getMe: () => API.get("/auth/me"),
   updateProfile: (data) => API.put("/auth/profile", data),
+  oauthLogin: (data) => API.post("/auth/oauth", data),
 };
 
 export const mentorAPI = {

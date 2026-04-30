@@ -1,4 +1,4 @@
-import create from 'zustand';
+import { create } from 'zustand';
 import { io } from 'socket.io-client';
 import { chatAPI } from '../utils/api';
 
@@ -25,8 +25,8 @@ const useChatStore = create((set, get) => ({
       }
       // Also update the lastMessage in conversations list
       set((state) => ({
-        conversations: state.conversations.map(conv => 
-          conv.id === message.conversationId 
+        conversations: state.conversations.map(conv =>
+          conv.id === message.conversationId
             ? { ...conv, lastMessage: message, updatedAt: message.createdAt }
             : conv
         ).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
@@ -40,8 +40,8 @@ const useChatStore = create((set, get) => ({
     socket.on("new_message_notification", ({ conversationId, message }) => {
       // Called when a message arrives for a conversation that is NOT currently open
       set((state) => ({
-        conversations: state.conversations.map(conv => 
-          conv.id === conversationId 
+        conversations: state.conversations.map(conv =>
+          conv.id === conversationId
             ? { ...conv, lastMessage: message, updatedAt: message.createdAt }
             : conv
         ).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
@@ -73,7 +73,7 @@ const useChatStore = create((set, get) => ({
   setActiveConversation: async (conversation) => {
     set({ activeConversation: conversation, messages: [], isLoading: true });
     const { socket } = get();
-    
+
     if (socket && conversation) {
       socket.emit("join_conversation", conversation.id);
     }

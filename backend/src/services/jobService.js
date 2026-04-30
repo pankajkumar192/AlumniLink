@@ -55,10 +55,9 @@ export const getAllJobPostings = async (filters = {}) => {
   });
 };
 
-// Get job posting by ID
 export const getJobPostingById = async (jobId) => {
   return await prisma.jobPosting.findUnique({
-    where: { id: jobId },
+    where: { id: parseInt(jobId) },
     include: {
       poster: {
         select: { id: true, name: true, email: true, company: true },
@@ -110,9 +109,10 @@ export const deleteJobPosting = async (jobId) => {
 
 // Apply to job
 export const applyToJob = async (jobId, userId) => {
+  const jobIdInt = parseInt(jobId);
   // Check if already applied
   const existingApplication = await prisma.jobApplication.findUnique({
-    where: { jobId_userId: { jobId, userId } },
+    where: { jobId_userId: { jobId: jobIdInt, userId } },
   });
 
   if (existingApplication) {
@@ -121,7 +121,7 @@ export const applyToJob = async (jobId, userId) => {
 
   const application = await prisma.jobApplication.create({
     data: {
-      jobId,
+      jobId: jobIdInt,
       userId,
       status: "PENDING",
     },

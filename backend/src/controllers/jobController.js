@@ -79,7 +79,7 @@ export const applyJob = async (req, res) => {
     const application = await applyToJob(req.params.id, req.user.id);
 
     // Create notification for job poster
-    await createNotification(job.postedBy.id, {
+    await createNotification(job.poster.id, {
       senderId: req.user.id,
       title: "New Job Application",
       message: `${req.user.name} applied for your job posting: ${job.title}`,

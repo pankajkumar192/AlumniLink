@@ -56,10 +56,9 @@ export const getAllEvents = async (filters = {}) => {
   });
 };
 
-// Get event by ID
 export const getEventById = async (eventId) => {
   return await prisma.event.findUnique({
-    where: { id: eventId },
+    where: { id: parseInt(eventId) },
     include: {
       organizer: {
         select: { id: true, name: true, email: true },
@@ -110,9 +109,10 @@ export const deleteEvent = async (eventId) => {
 
 // Register user for event
 export const registerForEvent = async (eventId, userId) => {
+  const eventIdInt = parseInt(eventId);
   // Check if already registered
   const existingAttendee = await prisma.eventAttendee.findUnique({
-    where: { eventId_userId: { eventId, userId } },
+    where: { eventId_userId: { eventId: eventIdInt, userId } },
   });
 
   if (existingAttendee) {
